@@ -182,9 +182,12 @@ def get_reconstructed_scene(outdir, model, device, silent, image_size, filelist,
     outfile = get_3D_model_from_scene(outdir, silent, scene, min_conf_thr, as_pointcloud, mask_sky,
                                       clean_depth, transparent_cams, cam_size, basename=basename) # Pass basename
 
+    view1, view2, pred1, pred2 = [output[k] for k in 'view1 view2 pred1 pred2'.split()]
+
     rgbimg_out = scene.imgs
     depths = to_numpy(scene.get_depthmaps())
-    confs = to_numpy([c for c in scene.im_conf])
+    confs = to_numpy([c.exp() for c in scene.im_conf])
+    match_confs = to_numpy([])
     
     output_imgs = []
     if rgbimg_out is not None and len(rgbimg_out) > 0:
@@ -206,6 +209,9 @@ def get_reconstructed_scene(outdir, model, device, silent, image_size, filelist,
             
             current_conf = confs[i] if i < len(confs) and confs[i] is not None else np.zeros_like(rgbimg_out[i][:,:,0], dtype=np.float32)
             output_imgs.append(rgb(cmap(current_conf / confs_max)))
+
+            matching_conf = matching_confs[i]
+            output_imgs.append(rgb(matching_conf)) if matching_conf is not None else np.zeros_like(rgbimg_out[i][:,:,0], dtype=np.float32)
 
 
     return scene, outfile, output_imgs

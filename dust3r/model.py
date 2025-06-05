@@ -58,8 +58,9 @@ class AsymmetricCroCo3DStereo (
     def __init__(self,
                  output_mode='pts3d',
                  head_type='linear',
-                 depth_mode=('exp', -inf, inf),
+                 depth_mode=('exp', -inf, inf), 
                  conf_mode=('exp', 1, inf),
+                 scene_conf_mode=None, # Sharjeel - added matching confidence
                  freeze='none',
                  landscape_only=True,
                  patch_embed_cls='PatchEmbedDust3R',  # PatchEmbedDust3R or ManyAR_PatchEmbed
@@ -70,7 +71,7 @@ class AsymmetricCroCo3DStereo (
 
         # dust3r specific initialization
         self.dec_blocks2 = deepcopy(self.dec_blocks)
-        self.set_downstream_head(output_mode, head_type, landscape_only, depth_mode, conf_mode, **croco_kwargs)
+        self.set_downstream_head(output_mode, head_type, landscape_only, depth_mode, conf_mode, scene_conf_mode, **croco_kwargs)
         self.set_freeze(freeze)
 
     @classmethod
@@ -109,7 +110,7 @@ class AsymmetricCroCo3DStereo (
         """ No prediction head """
         return
 
-    def set_downstream_head(self, output_mode, head_type, landscape_only, depth_mode, conf_mode, patch_size, img_size,
+    def set_downstream_head(self, output_mode, head_type, landscape_only, depth_mode, conf_mode, scene_conf_mode, patch_size, img_size,
                             **kw):
         assert img_size[0] % patch_size == 0 and img_size[1] % patch_size == 0, \
             f'{img_size=} must be multiple of {patch_size=}'
@@ -117,9 +118,10 @@ class AsymmetricCroCo3DStereo (
         self.head_type = head_type
         self.depth_mode = depth_mode
         self.conf_mode = conf_mode
+        self.scene_conf_mode = scene_conf_mode
         # allocate heads
-        self.downstream_head1 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode))
-        self.downstream_head2 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode))
+        self.downstream_head1 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_match_conf=bool(scene_conf_mode))
+        self.downstream_head2 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_match_conf=bool(scene_conf_mode))
         # magic wrapper
         self.head1 = transpose_to_landscape(self.downstream_head1, activate=landscape_only)
         self.head2 = transpose_to_landscape(self.downstream_head2, activate=landscape_only)

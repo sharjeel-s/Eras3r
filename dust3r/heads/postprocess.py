@@ -3,11 +3,12 @@
 #
 # --------------------------------------------------------
 # post process function for all heads: extract 3D points/confidence from output
+# Sharjeel - added matching confidence
 # --------------------------------------------------------
 import torch
 
 
-def postprocess(out, depth_mode, conf_mode):
+def postprocess(out, depth_mode, conf_mode, scene_conf_mode=None):
     """
     extract 3D points/confidence from prediction head output
     """
@@ -16,6 +17,10 @@ def postprocess(out, depth_mode, conf_mode):
 
     if conf_mode is not None:
         res['conf'] = reg_dense_conf(fmap[:, :, :, 3], mode=conf_mode)
+    
+    if scene_conf_mode is not None:
+        res['scene_conf'] = reg_dense_conf(fmap[:, :, :, 4], mode=scene_conf_mode)
+
     return res
 
 
@@ -55,4 +60,6 @@ def reg_dense_conf(x, mode):
         return vmin + x.exp().clip(max=vmax-vmin)
     if mode == 'sigmoid':
         return (vmax - vmin) * torch.sigmoid(x) + vmin
+    if mode == 'exp_reparam': #this is the reparamatarised loss so that there is no clipping
+        return x
     raise ValueError(f'bad {mode=}')

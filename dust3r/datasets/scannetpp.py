@@ -19,11 +19,20 @@ class ScanNetpp(BaseStereoViewDataset):
     def __init__(self, *args, ROOT, **kwargs):
         self.ROOT = ROOT
         super().__init__(*args, **kwargs)
-        assert self.split == 'train'
+        #assert self.split == 'train'
         self.loaded_data = self._load_data()
 
     def _load_data(self):
-        with np.load(osp.join(self.ROOT, 'all_metadata.npz')) as data:
+        # added the test split
+        # fraction used is 0.1
+        # test set is from the pairs and not the images, could try this later
+        if self.split == 'train':
+            npz_file = 'train_split.npz'
+        elif self.split == 'test':
+            npz_file = 'test_split.npz'
+        else:
+            raise ValueError(f"Unknown split: {self.split}. Only 'train' and 'test' are supported.")
+        with np.load(osp.join(self.ROOT, npz_file)) as data:
             self.scenes = data['scenes']
             self.sceneids = data['sceneids']
             self.images = data['images']

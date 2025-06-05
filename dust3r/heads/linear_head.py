@@ -3,6 +3,7 @@
 #
 # --------------------------------------------------------
 # linear head implementation for DUST3R
+# Sharjeel - added matching confidence 
 # --------------------------------------------------------
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,14 +16,16 @@ class LinearPts3d (nn.Module):
     Each token outputs: - 16x16 3D points (+ confidence)
     """
 
-    def __init__(self, net, has_conf=False):
+    def __init__(self, net, has_conf=False, has_scene_conf=False):
         super().__init__()
         self.patch_size = net.patch_embed.patch_size[0]
         self.depth_mode = net.depth_mode
         self.conf_mode = net.conf_mode
+        self.scene_conf_mode = net.scene_conf_mode
         self.has_conf = has_conf
+        self.has_scene_conf = has_scene_conf
 
-        self.proj = nn.Linear(net.dec_embed_dim, (3 + has_conf)*self.patch_size**2)
+        self.proj = nn.Linear(net.dec_embed_dim, (3 + has_conf + has_scene_conf)*self.patch_size**2)
 
     def setup(self, croconet):
         pass
@@ -38,4 +41,4 @@ class LinearPts3d (nn.Module):
         feat = F.pixel_shuffle(feat, self.patch_size)  # B,3,H,W
 
         # permute + norm depth
-        return postprocess(feat, self.depth_mode, self.conf_mode)
+        return postprocess(feat, self.depth_mode, self.conf_mode, self.scene_conf_mode)

@@ -7,6 +7,7 @@
 # or if it takes as input the output at every layer, the attribute return_all_layers should be set to True
 # the forward function also takes as input a dictionnary img_info with key "height" and "width"
 # for PixelwiseTask, the output will be of dimension B x num_channels x H x W
+# Sharjeel - added output for matching confidence
 # --------------------------------------------------------
 from einops import rearrange
 from typing import List
@@ -69,12 +70,13 @@ class PixelwiseTaskWithDPT(nn.Module):
     """ DPT module for dust3r, can return 3D points + confidence for all pixels"""
 
     def __init__(self, *, n_cls_token=0, hooks_idx=None, dim_tokens=None,
-                 output_width_ratio=1, num_channels=1, postprocess=None, depth_mode=None, conf_mode=None, **kwargs):
+                 output_width_ratio=1, num_channels=1, postprocess=None, depth_mode=None, conf_mode=None, scene_conf_mode=None, **kwargs):
         super(PixelwiseTaskWithDPT, self).__init__()
         self.return_all_layers = True  # backbone needs to return all layers
         self.postprocess = postprocess
         self.depth_mode = depth_mode
         self.conf_mode = conf_mode
+        self.scene_conf_mode = scene_conf_mode
 
         assert n_cls_token == 0, "Not implemented"
         dpt_args = dict(output_width_ratio=output_width_ratio,
@@ -89,11 +91,11 @@ class PixelwiseTaskWithDPT(nn.Module):
     def forward(self, x, img_info):
         out = self.dpt(x, image_size=(img_info[0], img_info[1]))
         if self.postprocess:
-            out = self.postprocess(out, self.depth_mode, self.conf_mode)
+            out = self.postprocess(out, self.depth_mode, self.conf_mode, self.scene_conf_mode)
         return out
 
 
-def create_dpt_head(net, has_conf=False):
+def create_dpt_head(net, has_conf=False, has_scene_conf=False):
     """
     return PixelwiseTaskWithDPT for given net params
     """
@@ -104,7 +106,7 @@ def create_dpt_head(net, has_conf=False):
     out_nchan = 3
     ed = net.enc_embed_dim
     dd = net.dec_embed_dim
-    return PixelwiseTaskWithDPT(num_channels=out_nchan + has_conf,
+    return PixelwiseTaskWithDPT(num_channels=out_nchan + has_conf + has_scene_conf,
                                 feature_dim=feature_dim,
                                 last_dim=last_dim,
                                 hooks_idx=[0, l2*2//4, l2*3//4, l2],
@@ -112,4 +114,5 @@ def create_dpt_head(net, has_conf=False):
                                 postprocess=postprocess,
                                 depth_mode=net.depth_mode,
                                 conf_mode=net.conf_mode,
+                                scene_conf_mode=net.scene_conf_mode,
                                 head_type='regression')

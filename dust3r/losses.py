@@ -237,6 +237,249 @@ class ConfLoss (MultiLoss):
 
         return conf_loss1 + conf_loss2, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), **details)
 
+class ConfLossNorm (MultiLoss):
+    """ Weighted regression by learned confidence.
+        Assuming the input pixel_loss is a pixel-level regression loss.
+
+    Principle:
+        high-confidence means high conf = 0.1 ==> conf_loss = x / 10 + alpha*log(10)
+        low  confidence means low  conf = 10  ==> conf_loss = x * 10 - alpha*log(10) 
+
+        alpha: hyperparameter
+    """
+
+    def __init__(self, pixel_loss, alpha=1):
+        super().__init__()
+        assert alpha > 0
+        self.alpha = alpha
+        self.pixel_loss = pixel_loss.with_reduction('none')
+
+    def get_name(self):
+        return f'ConfLoss({self.pixel_loss})'
+
+    def get_conf_log(self, x):
+        return x, torch.log(x)
+
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        # compute per-pixel loss
+        ((loss1, msk1), (loss2, msk2)), details = self.pixel_loss(gt1, gt2, pred1, pred2, **kw)
+        if loss1.numel() == 0:
+            print('NO VALID POINTS in img1', force=True)
+        if loss2.numel() == 0:
+            print('NO VALID POINTS in img2', force=True)
+
+        # weight by confidence
+        conf1, log_conf1 = self.get_conf_log(pred1['conf'][msk1])
+        conf2, log_conf2 = self.get_conf_log(pred2['conf'][msk2])
+        avg_conf1 = conf1.mean()
+        avg_conf2 = conf2.mean()
+        avg_log_conf1 = log_conf1.mean()
+        avg_log_conf2 = log_conf2.mean()
+        conf_loss1 = loss1 * conf1/avg_conf1 - self.alpha * log_conf1/(avg_log_conf1+10**-10)
+        conf_loss2 = loss2 * conf2/avg_conf2 - self.alpha * log_conf2/(avg_log_conf2+10**-10)
+
+        # average + nan protection (in case of no valid pixels at all)
+        conf_loss1 = conf_loss1.mean() if conf_loss1.numel() > 0 else 0
+        conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
+
+        return conf_loss1 + conf_loss2, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), **details)
+
+
+class ExpConfLossNorm (MultiLoss):
+    """ Weighted regression by learned confidence which is reparameterized to get conf from 0 onwards.
+        Assuming the input pixel_loss is a pixel-level regression loss.
+
+    Principle:
+        high-confidence means high conf = 0.1 ==> conf_loss = x / 10 + alpha*log(10)
+        low  confidence means low  conf = 10  ==> conf_loss = x * 10 - alpha*log(10) 
+
+        alpha: hyperparameter
+    """
+
+    def __init__(self, pixel_loss, alpha=1):
+        super().__init__()
+        assert alpha > 0
+        self.alpha = alpha
+        self.pixel_loss = pixel_loss.with_reduction('none')
+
+    def get_name(self):
+        return f'ConfLoss({self.pixel_loss})'           
+
+    def get_conf_exp(self, x):
+        return torch.exp(x), x
+
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        # compute per-pixel loss
+        ((loss1, msk1), (loss2, msk2)), details = self.pixel_loss(gt1, gt2, pred1, pred2, **kw)
+        if loss1.numel() == 0:
+            print('NO VALID POINTS in img1', force=True)
+        if loss2.numel() == 0:
+            print('NO VALID POINTS in img2', force=True)
+
+        # weight by confidence
+        exp_conf1, conf1 = self.get_conf_exp(pred1['conf'][msk1])
+        exp_conf2, conf2 = self.get_conf_exp(pred2['conf'][msk2])
+        avg_conf1 = conf1.mean()
+        avg_conf2 = conf2.mean()
+        avg_exp_conf1 = exp_conf1.mean()
+        avg_exp_conf2 = exp_conf2.mean()
+        conf_loss1 = loss1 * exp_conf1/avg_exp_conf1 - self.alpha * conf1/avg_conf1
+        conf_loss2 = loss2 * exp_conf2/avg_exp_conf2 - self.alpha * conf2/avg_conf2
+
+        # average + nan protection (in case of no valid pixels at all)
+        conf_loss1 = conf_loss1.mean() if conf_loss1.numel() > 0 else 0
+        conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
+
+        return conf_loss1 + conf_loss2, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), **details)
+
+
+
+class ExpConfLoss (MultiLoss):
+    """ Weighted regression by learned confidence which is reparameterized to get conf from 0 onwards.
+        Assuming the input pixel_loss is a pixel-level regression loss.
+
+    Principle:
+        high-confidence means high conf = 0.1 ==> conf_loss = x / 10 + alpha*log(10)
+        low  confidence means low  conf = 10  ==> conf_loss = x * 10 - alpha*log(10) 
+
+        alpha: hyperparameter
+    """
+
+    def __init__(self, pixel_loss, alpha=1):
+        super().__init__()
+        assert alpha > 0
+        self.alpha = alpha
+        self.pixel_loss = pixel_loss.with_reduction('none')
+
+    def get_name(self):
+        return f'ConfLoss({self.pixel_loss})'           
+
+    def get_conf_exp(self, x):
+        return torch.exp(x), x
+
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        # compute per-pixel loss
+        ((loss1, msk1), (loss2, msk2)), details = self.pixel_loss(gt1, gt2, pred1, pred2, **kw)
+        if loss1.numel() == 0:
+            print('NO VALID POINTS in img1', force=True)
+        if loss2.numel() == 0:
+            print('NO VALID POINTS in img2', force=True)
+
+        # weight by confidence
+        exp_conf1, conf1 = self.get_conf_exp(pred1['conf'][msk1])
+        exp_conf2, conf2 = self.get_conf_exp(pred2['conf'][msk2])
+
+        conf_loss1 = loss1 * exp_conf1 - self.alpha * conf1
+        conf_loss2 = loss2 * exp_conf2 - self.alpha * conf2
+
+        # average + nan protection (in case of no valid pixels at all)
+        conf_loss1 = conf_loss1.mean() if conf_loss1.numel() > 0 else 0
+        conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
+
+        return conf_loss1 + conf_loss2, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), **details)
+
+
+class ConfLoss_Masked (MultiLoss):
+    """ Weighted regression by learned confidence.
+        Assuming the input pixel_loss is a pixel-level regression loss.
+
+    Principle:
+        high-confidence means high conf = 0.1 ==> conf_loss = x / 10 + alpha*log(10)
+        low  confidence means low  conf = 10  ==> conf_loss = x * 10 - alpha*log(10) 
+
+        alpha: hyperparameter
+    """
+
+    def __init__(self, pixel_loss, alpha=1):
+        super().__init__()
+        assert alpha > 0
+        self.alpha = alpha
+        self.pixel_loss = pixel_loss.with_reduction('none')
+
+    def get_name(self):
+        return f'ConfLoss({self.pixel_loss})'
+
+    def get_conf_log(self, x):
+        return x, torch.log(x)
+
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        # compute per-pixel loss
+        ((loss1, msk1), (loss2, msk2)), details = self.pixel_loss(gt1, gt2, pred1, pred2, **kw)
+        if loss1.numel() == 0:
+            print('NO VALID POINTS in img1', force=True)
+        if loss2.numel() == 0:
+            print('NO VALID POINTS in img2', force=True)
+
+        # weight by confidence
+        conf1, log_conf1 = self.get_conf_log(pred1['conf'][msk1])
+        conf2, log_conf2 = self.get_conf_log(pred2['conf'][msk2])
+        conf_loss1 = loss1 * conf1 - self.alpha * log_conf1
+        conf_loss2 = loss2 * conf2 - self.alpha * log_conf2
+
+        # average + nan protection (in case of no valid pixels at all)
+        conf_loss1 = conf_loss1.mean() if conf_loss1.numel() > 0 else 0
+        conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
+
+        masked_confidence = conf1 * (1 - gt1['mask'][msk1].flatten()) + conf2 * (1 - gt2['mask'][msk2].flatten())  # Confidence in masked regions
+        masked_loss = masked_confidence.mean() 
+
+        return 0.1*masked_loss + conf_loss1 + conf_loss2, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), **details)
+
+class SceneConf_Loss (MultiLoss):
+    """Weighted regression by learned confidence and matching confidence.
+       Assuming the input pixel_loss is a pixel-level regression loss.
+
+       alpha_1 : hyperparameter for confidence loss
+       alpha_2 : hyperparameter for matching confidence loss
+    """
+
+    def __init__(self, pixel_loss, alpha_1=1, alpha_2=1, alpha_3=1):
+        super().__init__()
+        assert alpha_1 > 0 and alpha_2 > 0
+        self.alpha_1 = alpha_1
+        self.alpha_2 = alpha_2
+        self.alpha_3 = alpha_3
+        self.pixel_loss = pixel_loss.with_reduction('none')
+
+    def get_name(self):
+        return f'MatchingConf_Loss({self.pixel_loss})'
+    
+    def get_conf_exp(self, x):
+        return torch.exp(x), x
+    
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        #compute per-pixel loss
+        ((loss1, msk1), (loss2, msk2)), details = self.pixel_loss(gt1, gt2, pred1, pred2, **kw)
+        if loss1.numel() == 0:
+            print('NO VALID POINTS in img1', force=True)
+        if loss2.numel() == 0:
+            print('NO VALID POINTS in img2', force=True)
+        
+        #weighted by confidence
+        conf1, log_conf1 = self.get_conf_exp(pred1['conf'][msk1])
+        conf2, log_conf2 = self.get_conf_exp(pred2['conf'][msk2])
+
+
+        scene_conf1, scene_log_conf1 = self.get_conf_exp(pred1['scene_conf'][msk1])
+        scene_conf2, scene_log_conf2 = self.get_conf_exp(pred2['scene_conf'][msk2])
+
+        conf_loss1 = loss1 * conf1 * scene_conf1 - self.alpha_1 * log_conf1 - self.alpha_2 * scene_log_conf1
+        conf_loss2 = loss2 * conf2 * scene_conf2 - self.alpha_1 * log_conf2 - self.alpha_2 * scene_log_conf2
+
+        # average + nan protection (in case of no valid pixels at all)
+        conf_loss1 = conf_loss1.mean() if conf_loss1.numel() > 0 else 0
+        conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
+
+        # matching confidence loss supervised part 
+        scene_conf1_sv = pred1['scene_conf']-gt1['mask']
+        scene_conf2_sv = pred2['scene_conf']-gt2['mask']
+        
+        scene_conf_loss1_sv = abs(scene_conf1_sv[msk1].mean()) if scene_conf1_sv[msk1].numel() > 0 else 0
+        scene_conf_loss2_sv = abs(scene_conf2_sv[msk2].mean()) if scene_conf2_sv[msk2].numel() > 0 else 0
+        scene_conf_loss_sv = self.alpha_3 * (scene_conf_loss1_sv + scene_conf_loss2_sv)
+
+        return conf_loss1 + conf_loss2 + scene_conf_loss_sv, dict(conf_loss_1=float(conf_loss1), conf_loss2=float(conf_loss2), scene_conf_loss_sv=float(scene_conf_loss_sv), **details)
+
 
 class Regr3D_ShiftInv (Regr3D):
     """ Same than Regr3D but invariant to depth shift.
@@ -295,5 +538,127 @@ class Regr3D_ScaleInv (Regr3D):
 
 
 class Regr3D_ScaleShiftInv (Regr3D_ScaleInv, Regr3D_ShiftInv):
+    # calls Regr3D_ShiftInv first, then Regr3D_ScaleInv
+    pass
+
+
+class Regr3D_masked (Criterion, MultiLoss):
+    """ Ensure that all 3D points are correct.
+        Asymmetric loss: view1 is supposed to be the anchor.
+
+        P1 = RT1 @ D1
+        P2 = RT2 @ D2
+        loss1 = (I @ pred_D1) - (RT1^-1 @ RT1 @ D1)
+        loss2 = (RT21 @ pred_D2) - (RT1^-1 @ P2)
+              = (RT21 @ pred_D2) - (RT1^-1 @ RT2 @ D2)
+    """
+
+    def __init__(self, criterion, norm_mode='avg_dis', gt_scale=False):
+        super().__init__(criterion)
+        self.norm_mode = norm_mode
+        self.gt_scale = gt_scale
+
+    def get_all_pts3d(self, gt1, gt2, pred1, pred2, dist_clip=None):
+        # everything is normalized w.r.t. camera of view1
+        in_camera1 = inv(gt1['camera_pose'])
+        gt_pts1 = geotrf(in_camera1, gt1['pts3d'])  # B,H,W,3
+        gt_pts2 = geotrf(in_camera1, gt2['pts3d'])  # B,H,W,3
+
+        valid1 = gt1['valid_mask'].clone()
+        valid2 = gt2['valid_mask'].clone()
+
+        if dist_clip is not None:
+            # points that are too far-away == invalid
+            dis1 = gt_pts1.norm(dim=-1)  # (B, H, W)
+            dis2 = gt_pts2.norm(dim=-1)  # (B, H, W)
+            valid1 = valid1 & (dis1 <= dist_clip)
+            valid2 = valid2 & (dis2 <= dist_clip)
+        
+        if gt1['mask'] is not None:
+            valid1 = valid1 & (gt1['mask'] == 0)
+            valid2 = valid2 & (gt2['mask'] == 0)
+        
+
+        pr_pts1 = get_pred_pts3d(gt1, pred1, use_pose=False)
+        pr_pts2 = get_pred_pts3d(gt2, pred2, use_pose=True)
+
+        # normalize 3d points
+        if self.norm_mode:
+            pr_pts1, pr_pts2 = normalize_pointcloud(pr_pts1, pr_pts2, self.norm_mode, valid1, valid2)
+        if self.norm_mode and not self.gt_scale:
+            gt_pts1, gt_pts2 = normalize_pointcloud(gt_pts1, gt_pts2, self.norm_mode, valid1, valid2)
+
+        return gt_pts1, gt_pts2, pr_pts1, pr_pts2, valid1, valid2, {}
+
+    def compute_loss(self, gt1, gt2, pred1, pred2, **kw):
+        gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, monitoring = \
+            self.get_all_pts3d(gt1, gt2, pred1, pred2, **kw)
+        # loss on img1 side
+        l1 = self.criterion(pred_pts1[mask1], gt_pts1[mask1])
+        # loss on gt2 side
+        l2 = self.criterion(pred_pts2[mask2], gt_pts2[mask2])
+        self_name = type(self).__name__
+        details = {self_name + '_pts3d_1': float(l1.mean()), self_name + '_pts3d_2': float(l2.mean())}
+        return Sum((l1, mask1), (l2, mask2)), (details | monitoring)
+
+
+
+class Regr3D_ShiftInv_masked (Regr3D_masked):
+    """ Same than Regr3D but invariant to depth shift.
+    """
+
+    def get_all_pts3d(self, gt1, gt2, pred1, pred2):
+        # compute unnormalized points
+        gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, monitoring = \
+            super().get_all_pts3d(gt1, gt2, pred1, pred2)
+
+        # compute median depth
+        gt_z1, gt_z2 = gt_pts1[..., 2], gt_pts2[..., 2]
+        pred_z1, pred_z2 = pred_pts1[..., 2], pred_pts2[..., 2]
+        gt_shift_z = get_joint_pointcloud_depth(gt_z1, gt_z2, mask1, mask2)[:, None, None]
+        pred_shift_z = get_joint_pointcloud_depth(pred_z1, pred_z2, mask1, mask2)[:, None, None]
+
+        # subtract the median depth
+        gt_z1 -= gt_shift_z
+        gt_z2 -= gt_shift_z
+        pred_z1 -= pred_shift_z
+        pred_z2 -= pred_shift_z
+
+        # monitoring = dict(monitoring, gt_shift_z=gt_shift_z.mean().detach(), pred_shift_z=pred_shift_z.mean().detach())
+        return gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, monitoring
+
+
+class Regr3D_ScaleInv_masked (Regr3D_masked):
+    """ Same than Regr3D but invariant to depth shift.
+        if gt_scale == True: enforce the prediction to take the same scale than GT
+    """
+
+    def get_all_pts3d(self, gt1, gt2, pred1, pred2):
+        # compute depth-normalized points
+        gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, monitoring = super().get_all_pts3d(gt1, gt2, pred1, pred2)
+
+        # measure scene scale
+        _, gt_scale = get_joint_pointcloud_center_scale(gt_pts1, gt_pts2, mask1, mask2)
+        _, pred_scale = get_joint_pointcloud_center_scale(pred_pts1, pred_pts2, mask1, mask2)
+
+        # prevent predictions to be in a ridiculous range
+        pred_scale = pred_scale.clip(min=1e-3, max=1e3)
+
+        # subtract the median depth
+        if self.gt_scale:
+            pred_pts1 *= gt_scale / pred_scale
+            pred_pts2 *= gt_scale / pred_scale
+            # monitoring = dict(monitoring, pred_scale=(pred_scale/gt_scale).mean())
+        else:
+            gt_pts1 /= gt_scale
+            gt_pts2 /= gt_scale
+            pred_pts1 /= pred_scale
+            pred_pts2 /= pred_scale
+            # monitoring = dict(monitoring, gt_scale=gt_scale.mean(), pred_scale=pred_scale.mean().detach())
+
+        return gt_pts1, gt_pts2, pred_pts1, pred_pts2, mask1, mask2, monitoring
+
+
+class Regr3D_ScaleShiftInv_masked (Regr3D_ScaleInv, Regr3D_ShiftInv):
     # calls Regr3D_ShiftInv first, then Regr3D_ScaleInv
     pass

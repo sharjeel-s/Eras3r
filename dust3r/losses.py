@@ -471,8 +471,8 @@ class SceneConf_Loss (MultiLoss):
         conf_loss2 = conf_loss2.mean() if conf_loss2.numel() > 0 else 0
 
         # matching confidence loss supervised part 
-        scene_conf1_sv = pred1['scene_conf']-gt1['mask']
-        scene_conf2_sv = pred2['scene_conf']-gt2['mask']
+        scene_conf1_sv = pred1['scene_conf']+(1-gt1['mask'])
+        scene_conf2_sv = pred2['scene_conf']+(1-gt2['mask'])
         
         scene_conf_loss1_sv = abs(scene_conf1_sv[msk1].mean()) if scene_conf1_sv[msk1].numel() > 0 else 0
         scene_conf_loss2_sv = abs(scene_conf2_sv[msk2].mean()) if scene_conf2_sv[msk2].numel() > 0 else 0

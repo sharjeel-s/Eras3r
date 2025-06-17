@@ -153,13 +153,13 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
     cmap = pl.get_cmap('jet')
     depths_max = max([d.max() for d in depths])
     depths = [d/depths_max for d in depths]
-    confs = [np.exp(d) for d in confs]
+    #confs = [np.exp(d) for d in confs]
     confs_max = max([d.max() for d in confs])
     confs = [cmap(d/confs_max) for d in confs]
-    scene_conf = [to_numpy(pred1['scene_conf']), to_numpy(pred2['scene_conf'])]
-    scene_conf = [np.exp(d) for d in scene_conf]
-    confs_max = max([d.max() for d in scene_confs])
-    scene_confs = [cmap(d/confs_max) for d in scene_conf]
+    scene_conf = [to_numpy(pred1['scene_conf'][0]), to_numpy(pred2['scene_conf'][0])]
+    #scene_conf = [np.exp(d) for d in scene_conf]
+    confs_max = max([d.max() for d in scene_conf])
+    scene_conf = [cmap(d/confs_max) for d in scene_conf]
 
 
     imgs = []
@@ -167,7 +167,7 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
         imgs.append(rgbimg[i])
         imgs.append(rgb(depths[i]))
         imgs.append(rgb(confs[i]))
-        imgs.append(rgb(scene_confs[i]))
+        imgs.append(rgb(scene_conf[i]))
 
     return scene, outfile, imgs
 

@@ -131,7 +131,8 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
 
     pairs = make_pairs(imgs, scene_graph=scenegraph_type, prefilter=None, symmetrize=True)
     output = inference(pairs, model, device, batch_size=batch_size)
-    pred1, pred2 = output
+    pred1 = output['pred1']
+    pred2 = output['pred2']
 
     mode = GlobalAlignerMode.PointCloudOptimizer if len(imgs) > 2 else GlobalAlignerMode.PairViewer
     scene = global_aligner(output, device=device, mode=mode)
@@ -152,10 +153,13 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
     cmap = pl.get_cmap('jet')
     depths_max = max([d.max() for d in depths])
     depths = [d/depths_max for d in depths]
+    confs = [np.exp(d) for d in confs]
     confs_max = max([d.max() for d in confs])
     confs = [cmap(d/confs_max) for d in confs]
-    scene_conf = to_numpy([pred1['scene_conf'], pred2['scene_conf']])
-    scene_confs = [cmap(d/scene_conf.max()) for d in scene_conf]
+    scene_conf = [to_numpy(pred1['scene_conf']), to_numpy(pred2['scene_conf'])]
+    scene_conf = [np.exp(d) for d in scene_conf]
+    confs_max = max([d.max() for d in scene_confs])
+    scene_confs = [cmap(d/confs_max) for d in scene_conf]
 
 
     imgs = []

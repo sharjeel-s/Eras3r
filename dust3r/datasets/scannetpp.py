@@ -27,9 +27,9 @@ class ScanNetpp(BaseStereoViewDataset):
         # fraction used is 0.1
         # test set is from the pairs and not the images, could try this later
         if self.split == 'train':
-            npz_file = 'train_split.npz'
+            npz_file = 'train_metadata_updated_2.npz'
         elif self.split == 'test':
-            npz_file = 'test_split.npz'
+            npz_file = 'test_metadata_updated_2.npz'
         else:
             raise ValueError(f"Unknown split: {self.split}. Only 'train' and 'test' are supported.")
         with np.load(osp.join(self.ROOT, npz_file)) as data:

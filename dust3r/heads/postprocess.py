@@ -8,7 +8,7 @@
 import torch
 
 
-def postprocess(out, depth_mode, conf_mode, scene_conf_mode=None):
+def postprocess(out, depth_mode, conf_mode, scene_conf_mode=None, bi_mono_flag=None):
     """
     extract 3D points/confidence from prediction head output
     """
@@ -20,6 +20,9 @@ def postprocess(out, depth_mode, conf_mode, scene_conf_mode=None):
     
     if scene_conf_mode is not None:
         res['scene_conf'] = reg_dense_conf(fmap[:, :, :, 4], mode=scene_conf_mode)
+
+    if bi_mono_flag is not None:
+        res['bi_mono_flag'] = fmap[:, :, :, 4]
 
     return res
 

@@ -6,14 +6,17 @@
 # --------------------------------------------------------
 from .linear_head import LinearPts3d
 from .dpt_head import create_dpt_head
+from .bi_mono_head import BiMonoHead
 
 
-def head_factory(head_type, output_mode, net, has_conf=False, has_match_conf=False):
+def head_factory(head_type, output_mode, net, has_conf=False, has_scene_conf=False):
     """" build a prediction head for the decoder 
     """
     if head_type == 'linear' and output_mode == 'pts3d':
-        return LinearPts3d(net, has_conf, has_match_conf)
+        return LinearPts3d(net, has_conf, has_scene_conf)
     elif head_type == 'dpt' and output_mode == 'pts3d':
-        return create_dpt_head(net, has_conf=has_conf, has_match_conf=has_match_conf)
+        return create_dpt_head(net, has_conf=has_conf, has_scene_conf=has_scene_conf)
+    elif head_type == 'bi-mono':
+        return BiMonoHead(net, has_conf, has_scene_conf)
     else:
         raise NotImplementedError(f"unexpected {head_type=} and {output_mode=}")

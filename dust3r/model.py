@@ -17,12 +17,13 @@ from dust3r.patch_embed import get_patch_embed
 import dust3r.utils.path_to_croco  # noqa: F401
 from models.croco import CroCoNet  # noqa
 
+
 inf = float('inf')
 
 hf_version_number = huggingface_hub.__version__
 assert version.parse(hf_version_number) >= version.parse("0.22.0"), ("Outdated huggingface_hub version, "
                                                                      "please reinstall requirements.txt")
-
+            
 
 def load_model(model_path, device, verbose=True):
     if verbose:
@@ -60,7 +61,7 @@ class AsymmetricCroCo3DStereo (
                  head_type='linear',
                  depth_mode=('exp', -inf, inf), 
                  conf_mode=('exp', 1, inf),
-                 scene_conf_mode=None, # Sharjeel - added matching confidence
+                 scene_conf_mode=None, # Sharjeel - added scene confidence
                  freeze='none',
                  landscape_only=True,
                  patch_embed_cls='PatchEmbedDust3R',  # PatchEmbedDust3R or ManyAR_PatchEmbed
@@ -95,6 +96,7 @@ class AsymmetricCroCo3DStereo (
             for key, value in ckpt.items():
                 if key.startswith('dec_blocks'):
                     new_ckpt[key.replace('dec_blocks', 'dec_blocks2')] = value
+        
         return super().load_state_dict(new_ckpt, **kw)
 
     def set_freeze(self, freeze):  # this is for use by downstream models
@@ -120,8 +122,8 @@ class AsymmetricCroCo3DStereo (
         self.conf_mode = conf_mode
         self.scene_conf_mode = scene_conf_mode
         # allocate heads
-        self.downstream_head1 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_match_conf=bool(scene_conf_mode))
-        self.downstream_head2 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_match_conf=bool(scene_conf_mode))
+        self.downstream_head1 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_scene_conf=bool(scene_conf_mode))
+        self.downstream_head2 = head_factory(head_type, output_mode, self, has_conf=bool(conf_mode), has_scene_conf=bool(scene_conf_mode))
         # magic wrapper
         self.head1 = transpose_to_landscape(self.downstream_head1, activate=landscape_only)
         self.head2 = transpose_to_landscape(self.downstream_head2, activate=landscape_only)
@@ -159,20 +161,23 @@ class AsymmetricCroCo3DStereo (
         shape1 = view1.get('true_shape', torch.tensor(img1.shape[-2:])[None].repeat(B, 1))
         shape2 = view2.get('true_shape', torch.tensor(img2.shape[-2:])[None].repeat(B, 1))
         # warning! maybe the images have different portrait/landscape orientations
-
+        '''
         if is_symmetrized(view1, view2):
             # computing half of forward pass!'
             feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1[::2], img2[::2], shape1[::2], shape2[::2])
             feat1, feat2 = interleave(feat1, feat2)
             pos1, pos2 = interleave(pos1, pos2)
         else:
-            feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1, img2, shape1, shape2)
+        
+        '''
+        feat1, feat2, pos1, pos2 = self._encode_image_pairs(img1, img2, shape1, shape2)
 
         return (shape1, shape2), (feat1, feat2), (pos1, pos2)
 
     def _decoder(self, f1, pos1, f2, pos2):
         final_output = [(f1, f2)]  # before projection
-
+        camaps1=[]
+        camaps2=[]
         # project to decoder dim
         f1 = self.decoder_embed(f1)
         f2 = self.decoder_embed(f2)
@@ -180,16 +185,18 @@ class AsymmetricCroCo3DStereo (
         final_output.append((f1, f2))
         for blk1, blk2 in zip(self.dec_blocks, self.dec_blocks2):
             # img1 side
-            f1, _ = blk1(*final_output[-1][::+1], pos1, pos2)
+            f1, _, atn_1 = blk1(*final_output[-1][::+1], pos1, pos2)
             # img2 side
-            f2, _ = blk2(*final_output[-1][::-1], pos2, pos1)
+            f2, _, atn_2 = blk2(*final_output[-1][::-1], pos2, pos1)
             # store the result
             final_output.append((f1, f2))
+            camaps1.append(atn_1)
+            camaps2.append(atn_2)
 
         # normalize last output
         del final_output[1]  # duplicate with final_output[0]
         final_output[-1] = tuple(map(self.dec_norm, final_output[-1]))
-        return zip(*final_output)
+        return zip(*final_output), camaps1, camaps2
 
     def _downstream_head(self, head_num, decout, img_shape):
         B, S, D = decout[-1].shape
@@ -202,11 +209,20 @@ class AsymmetricCroCo3DStereo (
         (shape1, shape2), (feat1, feat2), (pos1, pos2) = self._encode_symmetrized(view1, view2)
 
         # combine all ref images into object-centric representation
-        dec1, dec2 = self._decoder(feat1, pos1, feat2, pos2)
-
+        (dec1, dec2), atn_1, atn_2 = self._decoder(feat1, pos1, feat2, pos2)
+        
+        atn_1 = [attn.mean(dim=1).detach() for attn in atn_1]
+        atn_2 = [attn.mean(dim=1).detach() for attn in atn_2]   
+        # heuristic attention refine
+        '''for i in range(len(atn_1)):
+            atn_1[i][:,:,0]= atn_1[i].min()
+            atn_2[i][:,:,0]= atn_2[i].min() 
+'''
         with torch.cuda.amp.autocast(enabled=False):
             res1 = self._downstream_head(1, [tok.float() for tok in dec1], shape1)
             res2 = self._downstream_head(2, [tok.float() for tok in dec2], shape2)
 
         res2['pts3d_in_other_view'] = res2.pop('pts3d')  # predict view2's pts3d in view1's frame
+        res1['atn'] = atn_1
+        res2['atn'] = atn_2
         return res1, res2

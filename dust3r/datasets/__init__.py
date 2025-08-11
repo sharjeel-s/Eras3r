@@ -13,6 +13,7 @@ from .waymo import Waymo  # noqa
 from .wildrgbd import WildRGBD  # noqa
 from .scannet_masked import ScanNetppMasked
 from .scannet_bg_change import ScanNetppNewBG
+from .scannet_covisibility import ScanNetpp_CoVis  
 
 def get_data_loader(dataset, batch_size, num_workers=8, shuffle=True, drop_last=True, pin_mem=True):
     import torch

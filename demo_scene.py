@@ -156,10 +156,10 @@ def get_reconstructed_scene(outdir, model, device, image_size, filelist, schedul
     #confs = [np.exp(d) for d in confs]
     confs_max = max([d.max() for d in confs])
     confs = [cmap(d/confs_max) for d in confs]
-    scene_conf = [to_numpy(pred1['scene_conf'][0]), to_numpy(pred2['scene_conf'][0])]
+    scene_conf = [to_numpy(pred1['bi_mono_flag'][0]), to_numpy(pred2['bi_mono_flag'][0])]
     #scene_conf = [np.exp(d) for d in scene_conf]
     confs_max = max([d.max() for d in scene_conf])
-    scene_conf = [cmap(d/confs_max) for d in scene_conf]
+
 
 
     imgs = []
